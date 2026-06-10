@@ -58,6 +58,7 @@ from bot.messenger import Messenger
 from bot.vk_patch import apply as apply_vk_patch
 from config import load_config
 from health_server import start_from_env
+from services.keepalive import start_from_env as start_keepalive
 from services.reminders import ReminderService
 from utils import storage
 from yclients import YClientsClient, YClientsError, YClientsPermissionError
@@ -354,6 +355,7 @@ def handle_message_event(user_id: int, text: str, text_lower: str) -> None:
 
 _shutdown = False
 _health_server = None
+_keepalive = None
 
 
 def _handle_shutdown(signum, frame) -> None:
@@ -361,6 +363,8 @@ def _handle_shutdown(signum, frame) -> None:
     logger.info("Получен сигнал %s, завершаю работу...", signum)
     _shutdown = True
     reminders.stop()
+    if _keepalive is not None:
+        _keepalive.stop()
     if _health_server is not None:
         _health_server.stop()
 
@@ -408,7 +412,7 @@ def _run_longpoll() -> None:
 
 
 def run() -> None:
-    global _shutdown, _health_server
+    global _shutdown, _health_server, _keepalive
 
     signal.signal(signal.SIGTERM, _handle_shutdown)
     signal.signal(signal.SIGINT, _handle_shutdown)
@@ -418,6 +422,7 @@ def run() -> None:
     _health_server = start_from_env()
     if _health_server is not None:
         logger.info("Режим Web Service (Render): health-check на PORT=%s", os.getenv("PORT"))
+        _keepalive = start_keepalive()
         bot_thread = threading.Thread(target=_run_longpoll, name="vk-longpoll", daemon=True)
         bot_thread.start()
         try:
