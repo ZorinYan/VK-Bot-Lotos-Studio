@@ -1,0 +1,243 @@
+# Деплой бота на GitHub + Render
+
+Пошаговая инструкция: залить код на GitHub и запустить бота на [Render](https://render.com).
+
+**Важно перед стартом**
+
+1. **Остановите бота на своём ПК** (`Ctrl+C` в терминале) — одновременно два экземпляра работать не должны.
+2. Бот использует **VK Long Poll** — это **фоновый процесс**, не веб-сайт. На Render нужен тип сервиса **Background Worker**, не Web Service.
+3. На Render Worker — **платный** тариф (план Starter, около **$7/мес**). Бесплатный Web Service для Long Poll **не подходит** (нет постоянного процесса опроса VK).
+
+---
+
+## Часть 1. Подготовка проекта (на вашем ПК)
+
+### Шаг 1. Проверьте, что не попадёт в GitHub
+
+В репозиторий **не должны** уйти секреты и данные клиентов:
+
+| Файл | Почему |
+|------|--------|
+| `.env` | токены VK и YClients |
+| `data/users.json` | телефоны клиентов |
+| `data/reminders.json` | служебные данные |
+
+Это уже прописано в `.gitignore`.
+
+**Можно и нужно** коммитить:
+
+- весь код (`bot/`, `yclients/`, `main.py`, …)
+- `data/studio_info.json` — контакты и FAQ
+- `.env.example` — шаблон без секретов
+- `render.yaml` — конфиг Render
+
+### Шаг 2. Заполните `data/studio_info.json`
+
+Проверьте адрес, телефон, часы работы и FAQ — этот файл уедет в GitHub.
+
+### Шаг 3. Убедитесь, что бот работает локально
+
+```powershell
+cd C:\WEB\lotos_vk_bot
+python -m venv venv
+.\venv\Scripts\activate
+pip install -r requirements.txt
+# .env должен быть заполнен
+python main.py
+```
+
+Напишите боту в VK — должен ответить. Остановите: `Ctrl+C`.
+
+---
+
+## Часть 2. GitHub
+
+### Шаг 4. Создайте репозиторий на GitHub
+
+1. Откройте https://github.com/new
+2. Имя, например: `lotos-vk-bot`
+3. **Private** (рекомендуется — код студии)
+4. Без README / .gitignore (они уже есть в проекте)
+5. **Create repository**
+
+### Шаг 5. Залейте код (PowerShell)
+
+```powershell
+cd C:\WEB\lotos_vk_bot
+
+git init
+git add .
+git status
+```
+
+Убедитесь, что в списке **нет** `.env`, `data/users.json`, `data/reminders.json`.
+
+```powershell
+git commit -m "VK bot Lotos: initial commit"
+git branch -M main
+git remote add origin https://github.com/ВАШ_ЛОГИН/lotos-vk-bot.git
+git push -u origin main
+```
+
+При первом `push` GitHub попросит войти (браузер или Personal Access Token).
+
+### Шаг 6. Personal Access Token (если Git просит пароль)
+
+1. GitHub → **Settings** → **Developer settings** → **Personal access tokens** → **Tokens (classic)**
+2. **Generate new token** → отметьте `repo`
+3. Скопируйте токен — используйте его вместо пароля при `git push`
+
+---
+
+## Часть 3. Render
+
+### Шаг 7. Регистрация
+
+1. https://render.com → **Get Started**
+2. Войдите через **GitHub** — дайте доступ к репозиторию `lotos-vk-bot`
+
+### Шаг 8. Создание Worker (способ А — через Blueprint, проще)
+
+1. Render Dashboard → **New** → **Blueprint**
+2. Подключите репозиторий `lotos-vk-bot`
+3. Render прочитает `render.yaml` из корня проекта
+4. Нажмите **Apply**
+
+Появится сервис `lotos-vk-bot` типа **Worker**.
+
+### Шаг 8 (альтернатива). Создание Worker вручную (способ Б)
+
+1. **New** → **Background Worker**
+2. Подключите репозиторий GitHub
+3. Заполните:
+
+| Поле | Значение |
+|------|----------|
+| Name | `lotos-vk-bot` |
+| Region | `Frankfurt` (ближе к РФ) |
+| Branch | `main` |
+| Runtime | `Python 3` |
+| Build Command | `pip install -r requirements.txt` |
+| Start Command | `python main.py` |
+| Plan | **Starter** ($7/мес) |
+
+### Шаг 9. Переменные окружения (Environment)
+
+В Render: сервис `lotos-vk-bot` → **Environment** → добавьте:
+
+| Key | Value | Секрет? |
+|-----|-------|---------|
+| `VK_GROUP_TOKEN` | токен сообщества VK | ✅ Secret |
+| `YCLIENTS_PARTNER_TOKEN` | partner token YClients | ✅ Secret |
+| `YCLIENTS_USER_TOKEN` | user token YClients | ✅ Secret |
+| `YCLIENTS_COMPANY_ID` | `44598` | |
+| `STUDIO_NAME` | `Лотос` | |
+| `YCLIENTS_BOOKING_URL` | `https://n1996926.yclients.com/` | |
+| `REMINDER_MINUTES_BEFORE` | `60` | |
+| `REMINDER_CHECK_INTERVAL_SEC` | `120` | |
+| `PYTHON_VERSION` | `3.12.0` | |
+
+Скопируйте значения из вашего локального `.env`.  
+Файл `.env` на Render **загружать не нужно** — только переменные в Dashboard.
+
+Нажмите **Save Changes** — Render пересоберёт и запустит бота.
+
+### Шаг 10. Проверка
+
+1. **Logs** в Render — должно быть:
+   ```
+   Бот запущен
+   Long Poll запущен
+   Напоминания запущены: за 60 мин...
+   ```
+2. Напишите боту в VK — должен ответить.
+3. Локальный бот на ПК **должен быть выключен**.
+
+---
+
+## Часть 4. Обновление бота
+
+После изменений в коде:
+
+```powershell
+cd C:\WEB\lotos_vk_bot
+git add .
+git commit -m "описание изменений"
+git push
+```
+
+Render с `autoDeploy: true` (в `render.yaml`) задеплоит автоматически через 2–5 минут.
+
+Ручной деплой: Dashboard → **Manual Deploy** → **Deploy latest commit**.
+
+---
+
+## Данные клиентов на Render (важно!)
+
+Бот хранит привязку «VK → телефон» в `data/users.json` на диске сервера.
+
+На Render диск **временный**: при **пересборке** или **новом деплое** файл может **обнулиться**. Клиентам придётся снова нажать **«Войти»**.
+
+**Варианты:**
+
+| Вариант | Плюсы | Минусы |
+|---------|-------|--------|
+| Ничего не делать | бесплатно | после деплоя клиенты входят заново |
+| [Persistent Disk](https://render.com/docs/disks) на Render | данные сохраняются | ~$0.25/ГБ в месяц, настройка mount |
+| Oracle Cloud (см. DEPLOY_ORACLE.md) | бесплатный VPS, постоянный диск | сложнее настройка |
+
+Для студии с десятками клиентов обычно достаточно первого варианта — перелогин после редких обновлений.
+
+---
+
+## Логи и диагностика
+
+| Задача | Где |
+|--------|-----|
+| Логи бота | Render → сервис → **Logs** |
+| Ошибка при старте | Logs, строка `RuntimeError: Заполните переменные` → не хватает env |
+| Бот не отвечает | Проверьте: локальный бот выключен, `VK_GROUP_TOKEN` верный, Long Poll включён в VK |
+| Два бота сразу | VK будет слать события то одному, то другому — остановите лишний |
+
+### Включить Long Poll в VK
+
+Сообщество → **Управление** → **Работа с API** → **Long Poll API** → **Включено**.
+
+---
+
+## Чеклист
+
+- [ ] Локальный бот остановлен
+- [ ] `.env` не в git (`git status` чистый от секретов)
+- [ ] Репозиторий на GitHub создан (лучше Private)
+- [ ] Render Worker создан (не Web Service)
+- [ ] Все переменные окружения заданы
+- [ ] В логах Render: «Бот запущен»
+- [ ] Бот отвечает в VK
+- [ ] `data/studio_info.json` с актуальными контактами
+
+---
+
+## Стоимость (ориентир)
+
+| Пункт | Цена |
+|-------|------|
+| GitHub Private | бесплатно |
+| Render Worker Starter | ~$7/мес |
+| Persistent Disk (опционально) | от ~$0.25/мес |
+
+---
+
+## Частые ошибки
+
+**`Application failed to respond`**  
+Вы создали Web Service вместо Worker. Удалите и создайте **Background Worker**.
+
+**`Заполните переменные в .env`**  
+На Render не заданы `VK_GROUP_TOKEN` / токены YClients в Environment.
+
+**Бот отвечал и перестал после деплоя**  
+Смотрите Logs. Часто — неверный токен или запущена вторая копия на ПК.
+
+**Напоминания не приходят**  
+Клиент должен нажать «Войти» на Render-версии (после деплоя `users.json` пустой).

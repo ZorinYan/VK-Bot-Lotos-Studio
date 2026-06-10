@@ -1,0 +1,33 @@
+# Blueprint для Render: https://render.com/docs/blueprint-spec
+#
+# Важно: VK Long Poll — это фоновый процесс, нужен тип Worker (не Web Service).
+# При импорте Blueprint секреты (sync: false) вводятся вручную в Dashboard.
+
+services:
+  - type: worker
+    name: lotos-vk-bot
+    runtime: python
+    plan: starter
+    region: frankfurt
+    buildCommand: pip install -r requirements.txt
+    startCommand: python main.py
+    autoDeploy: true
+    envVars:
+      - key: PYTHON_VERSION
+        value: "3.12.0"
+      - key: VK_GROUP_TOKEN
+        sync: false
+      - key: YCLIENTS_PARTNER_TOKEN
+        sync: false
+      - key: YCLIENTS_USER_TOKEN
+        sync: false
+      - key: YCLIENTS_COMPANY_ID
+        value: "44598"
+      - key: STUDIO_NAME
+        value: Лотос
+      - key: YCLIENTS_BOOKING_URL
+        value: https://n1996926.yclients.com/
+      - key: REMINDER_MINUTES_BEFORE
+        value: "60"
+      - key: REMINDER_CHECK_INTERVAL_SEC
+        value: "120"
