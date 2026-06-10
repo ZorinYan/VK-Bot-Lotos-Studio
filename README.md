@@ -22,7 +22,7 @@ python main.py
 
 | Платформа | Инструкция |
 |-----------|------------|
-| **Render** (рекомендуется) | [DEPLOY_RENDER.md](DEPLOY_RENDER.md) |
+| **Render** (Web Service) | [DEPLOY_RENDER.md](DEPLOY_RENDER.md) |
 | Oracle Cloud Free | [DEPLOY_ORACLE.md](DEPLOY_ORACLE.md) |
 
 ## Структура

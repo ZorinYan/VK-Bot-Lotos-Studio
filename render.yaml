@@ -1,16 +1,17 @@
 # Blueprint для Render: https://render.com/docs/blueprint-spec
 #
-# Важно: VK Long Poll — это фоновый процесс, нужен тип Worker (не Web Service).
-# При импорте Blueprint секреты (sync: false) вводятся вручную в Dashboard.
+# Web Service: бот + HTTP health-check на PORT (для Render).
+# Long Poll крутится в фоновом потоке, /health отвечает 200.
 
 services:
-  - type: worker
+  - type: web
     name: lotos-vk-bot
     runtime: python
-    plan: starter
+    plan: free
     region: frankfurt
     buildCommand: pip install -r requirements.txt
     startCommand: python main.py
+    healthCheckPath: /health
     autoDeploy: true
     envVars:
       - key: PYTHON_VERSION

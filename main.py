@@ -1,5 +1,7 @@
 import logging
+import os
 import signal
+import threading
 import time
 from pathlib import Path
 
@@ -55,6 +57,7 @@ from bot.trainer_handler import TrainerHandler
 from bot.messenger import Messenger
 from bot.vk_patch import apply as apply_vk_patch
 from config import load_config
+from health_server import start_from_env
 from services.reminders import ReminderService
 from utils import storage
 from yclients import YClientsClient, YClientsError, YClientsPermissionError
@@ -350,6 +353,7 @@ def handle_message_event(user_id: int, text: str, text_lower: str) -> None:
 
 
 _shutdown = False
+_health_server = None
 
 
 def _handle_shutdown(signum, frame) -> None:
@@ -357,6 +361,8 @@ def _handle_shutdown(signum, frame) -> None:
     logger.info("Получен сигнал %s, завершаю работу...", signum)
     _shutdown = True
     reminders.stop()
+    if _health_server is not None:
+        _health_server.stop()
 
 
 def _process_event(event) -> None:
@@ -385,15 +391,8 @@ def _process_event(event) -> None:
         )
 
 
-def run() -> None:
-    global _shutdown
-
-    signal.signal(signal.SIGTERM, _handle_shutdown)
-    signal.signal(signal.SIGINT, _handle_shutdown)
-
-    print("Бот запущен")
+def _run_longpoll() -> None:
     logger.info("Long Poll запущен")
-
     while not _shutdown:
         try:
             longpoll = VkLongPoll(vk_session)
@@ -406,6 +405,29 @@ def run() -> None:
                 break
             logger.exception("Ошибка Long Poll, переподключение через 5 сек...")
             time.sleep(5)
+
+
+def run() -> None:
+    global _shutdown, _health_server
+
+    signal.signal(signal.SIGTERM, _handle_shutdown)
+    signal.signal(signal.SIGINT, _handle_shutdown)
+
+    print("Бот запущен")
+
+    _health_server = start_from_env()
+    if _health_server is not None:
+        logger.info("Режим Web Service (Render): health-check на PORT=%s", os.getenv("PORT"))
+        bot_thread = threading.Thread(target=_run_longpoll, name="vk-longpoll", daemon=True)
+        bot_thread.start()
+        try:
+            while not _shutdown and bot_thread.is_alive():
+                bot_thread.join(timeout=1)
+        except KeyboardInterrupt:
+            _handle_shutdown(signal.SIGINT, None)
+        bot_thread.join(timeout=10)
+    else:
+        _run_longpoll()
 
     logger.info("Бот остановлен")
 
